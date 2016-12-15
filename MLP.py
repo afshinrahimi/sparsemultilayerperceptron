@@ -437,7 +437,9 @@ class MLP():
             Y_test = Y_test.astype('int32')
         test_loss, test_acc = self.f_val(X_test, Y_test)
         return test_acc
-        
+    
+    def score(self, X_test, Y_test):
+        return self.accuracy(self, X_test, Y_test)      
         
         
 if __name__ == '__main__':
