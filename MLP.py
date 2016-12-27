@@ -291,7 +291,7 @@ class MLP():
         return test_acc
     
     def score(self, X_test, Y_test):
-        return self.accuracy(self, X_test, Y_test)      
+        return self.accuracy(X_test, Y_test)      
         
         
 if __name__ == '__main__':
