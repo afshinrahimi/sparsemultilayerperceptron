@@ -86,155 +86,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 
 
 
-def mlp(X_train, Y_train, X_dev, Y_dev, X_test, Y_test, n_epochs=10, batch_size=1000, init_parameters=None, complete_prob=True, add_hidden=False, regul_coefs=[5e-5, 5e-5], save_results=True, hidden_layer_size=None, drop_out=False, drop_out_coefs=[0.5, 0.5]):
-    
-    logging.info('building the network...' + ' hidden:' + str(add_hidden))
-    in_size = X_train.shape[1]
-    best_params = None
-    best_val_acc = 0.0
-    drop_out_hid, drop_out_in = drop_out_coefs
-    if complete_prob:
-        out_size = Y_train.shape[1]
-    else:
-        out_size = len(set(Y_train.tolist()))
-    
-    if hidden_layer_size:
-        pass
-    else:
-        hidden_layer_size = min(5 * out_size, int(in_size / 20))
-    logging.info('hidden layer size is ' + str(hidden_layer_size))
-    # Prepare Theano variables for inputs and targets
-    if not sp.sparse.issparse(X_train):
-        logging.info('input matrix is not sparse!')
-        X_sym = T.matrix()
-    else:
-        X_sym = S.csr_matrix(name='inputs', dtype='float32')
-    
-    if complete_prob:
-        y_sym = T.matrix()
-    else:
-        y_sym = T.ivector()    
-    
-    l_in = lasagne.layers.InputLayer(shape=(None, in_size),
-                                     input_var=X_sym)
-    
-    if drop_out:
-        l_in = lasagne.layers.dropout(l_in, p=drop_out_in)
 
-    if add_hidden:
-        if not sp.sparse.issparse(X_train):
-            l_hid1 = lasagne.layers.DenseLayer(
-                l_in, num_units=hidden_layer_size,
-                nonlinearity=lasagne.nonlinearities.rectify,
-                W=lasagne.init.GlorotUniform())
-        else:
-            l_hid1 = SparseInputDenseLayer(
-                l_in, num_units=hidden_layer_size,
-                nonlinearity=lasagne.nonlinearities.rectify,
-                W=lasagne.init.GlorotUniform())
-        if drop_out:
-            l_hid1 = lasagne.layers.dropout(l_hid1, drop_out_hid)
-        
-        l_out = lasagne.layers.DenseLayer(
-        l_hid1, num_units=out_size,
-        nonlinearity=lasagne.nonlinearities.softmax)
-    else:
-        if not sp.sparse.issparse(X_train):
-            l_out = lasagne.layers.DenseLayer(
-                l_in, num_units=out_size,
-                nonlinearity=lasagne.nonlinearities.softmax)
-            if drop_out:
-                l_hid1 = lasagne.layers.dropout(l_hid1, drop_out_hid)
-        else:
-            l_out = SparseInputDenseLayer(
-                l_in, num_units=out_size,
-                nonlinearity=lasagne.nonlinearities.softmax)
-            if drop_out:
-                l_hid1 = SparseInputDropoutLayer(l_hid1, drop_out_hid)
-    
-    
-
-    if add_hidden:
-        embedding = lasagne.layers.get_output(l_hid1, X_sym, deterministic=True)
-        f_get_embeddings = theano.function([X_sym], embedding)
-    output = lasagne.layers.get_output(l_out, X_sym, deterministic=True)
-    pred = output.argmax(-1)
-    loss = lasagne.objectives.categorical_crossentropy(output, y_sym)
-    #loss = lasagne.objectives.multiclass_hinge_loss(output, y_sym)
-    loss = loss.mean()
-    
-    
-    l1_share_out = 0.5
-    l1_share_hid = 0.5
-    regul_coef_out, regul_coef_hid = regul_coefs
-    logging.info('regul coefficient for output and hidden layers are ' + str(regul_coefs))
-    l1_penalty = lasagne.regularization.regularize_layer_params(l_out, l1) * regul_coef_out * l1_share_out
-    l2_penalty = lasagne.regularization.regularize_layer_params(l_out, l2) * regul_coef_out * (1-l1_share_out)
-    if add_hidden:
-        l1_penalty += lasagne.regularization.regularize_layer_params(l_hid1, l1) * regul_coef_hid * l1_share_hid
-        l2_penalty += lasagne.regularization.regularize_layer_params(l_hid1, l2) * regul_coef_hid * (1-l1_share_hid)
-    loss = loss + l1_penalty + l2_penalty
-
-    if complete_prob:
-        y_sym_one_hot = y_sym.argmax(-1)
-        acc = T.mean(T.eq(pred, y_sym_one_hot))
-    else:
-        acc = T.mean(T.eq(pred, y_sym))
-    if init_parameters:
-        lasagne.layers.set_all_param_values(l_out, init_parameters)
-    parameters = lasagne.layers.get_all_params(l_out, trainable=True)
-    
-    #print(params)
-    #updates = lasagne.updates.nesterov_momentum(loss, parameters, learning_rate=0.01, momentum=0.9)
-    #updates = lasagne.updates.sgd(loss, parameters, learning_rate=0.01)
-    #updates = lasagne.updates.adagrad(loss, parameters, learning_rate=0.1, epsilon=1e-6)
-    #updates = lasagne.updates.adadelta(loss, parameters, learning_rate=0.1, rho=0.95, epsilon=1e-6)
-    updates = lasagne.updates.adam(loss, parameters, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)
-    
-    f_train = theano.function([X_sym, y_sym], [loss, acc], updates=updates)
-    f_val = theano.function([X_sym, y_sym], [loss, acc])
-    f_predict = theano.function([X_sym], pred)
-    f_predict_proba = theano.function([X_sym], output)
-    
-    
-    X_train = X_train.astype('float32')
-    X_test = X_test.astype('float32')
-    X_dev = X_dev.astype('float32')
-
-    if complete_prob:
-        Y_train = Y_train.astype('float32')
-        Y_test = Y_test.astype('float32')
-        Y_dev = Y_dev.astype('float32')
-    else:
-        Y_train = Y_train.astype('int32')
-        Y_test = Y_test.astype('int32')
-        Y_dev = Y_dev.astype('int32')
-
-    logging.info('training (n_epochs, batch_size) = (' + str(n_epochs) + ', ' + str(batch_size) + ')' )
-    n_validation_down = 0
-    for n in xrange(n_epochs):
-        for batch in iterate_minibatches(X_train, Y_train, batch_size, shuffle=True):
-            x_batch, y_batch = batch
-            l_train, acc_train = f_train(x_batch, y_batch)
-            l_val, acc_val = f_val(X_dev, Y_dev)
-        if acc_val > best_val_acc:
-            best_val_acc = acc_val
-            best_params = lasagne.layers.get_all_param_values(l_out)
-            n_validation_down = 0
-        else:
-            #early stopping
-            n_validation_down += 1
-        logging.info('epoch ' + str(n) + ' ,train_loss ' + str(l_train) + ' ,acc ' + str(acc_train) + ' ,val_loss ' + str(l_val) + ' ,acc ' + str(acc_val) + ',best_val_acc ' + str(best_val_acc))
-        if n_validation_down > 2:
-            logging.info('validation results went down. early stopping ...')
-            break
-    
-    lasagne.layers.set_all_param_values(l_out, best_params)
-    
-    logging.info('***************** final results based on best validation **************')
-    l_val, acc_val = f_val(X_dev, Y_dev)
-    l_test, acc_test = f_val(X_test, Y_test)
-    logging.info('Best dev acc: %f test acc: %f' %(acc_val, acc_test))
 
 class MLP():
     def __init__(self, 
@@ -345,7 +197,7 @@ class MLP():
             self.embedding = lasagne.layers.get_output(l_hid1, self.X_sym, deterministic=True)
             self.f_get_embeddings = theano.function([self.X_sym], self.embedding)
         self.output = lasagne.layers.get_output(self.l_out, self.X_sym, deterministic=True)
-        pred = self.output.argmax(-1)
+        self.pred = self.output.argmax(-1)
         if self.loss_name == 'log':
             loss = lasagne.objectives.categorical_crossentropy(self.output, self.y_sym)
         elif self.loss_name == 'hinge':
@@ -368,7 +220,7 @@ class MLP():
             self.y_sym_one_hot = self.y_sym.argmax(-1)
             self.acc = T.mean(T.eq(self.pred, self.y_sym_one_hot))
         else:
-            acc = T.mean(T.eq(pred, self.y_sym))
+            acc = T.mean(T.eq(self.pred, self.y_sym))
         if self.init_parameters:
             lasagne.layers.set_all_param_values(self.l_out, self.init_parameters)
         parameters = lasagne.layers.get_all_params(self.l_out, trainable=True)
