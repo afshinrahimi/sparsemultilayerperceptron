@@ -220,7 +220,7 @@ class MLP():
             self.y_sym_one_hot = self.y_sym.argmax(-1)
             self.acc = T.mean(T.eq(self.pred, self.y_sym_one_hot))
         else:
-            acc = T.mean(T.eq(self.pred, self.y_sym))
+            self.acc = T.mean(T.eq(self.pred, self.y_sym))
         if self.init_parameters:
             lasagne.layers.set_all_param_values(self.l_out, self.init_parameters)
         parameters = lasagne.layers.get_all_params(self.l_out, trainable=True)
@@ -232,8 +232,8 @@ class MLP():
         #updates = lasagne.updates.adadelta(loss, parameters, learning_rate=0.1, rho=0.95, epsilon=1e-6)
         updates = lasagne.updates.adam(loss, parameters, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)
         
-        self.f_train = theano.function([self.X_sym, self.y_sym], [loss, acc], updates=updates)
-        self.f_val = theano.function([self.X_sym, self.y_sym], [loss, acc])
+        self.f_train = theano.function([self.X_sym, self.y_sym], [loss, self.acc], updates=updates)
+        self.f_val = theano.function([self.X_sym, self.y_sym], [loss, self.acc])
         self.f_predict = theano.function([self.X_sym], self.pred)
         self.f_predict_proba = theano.function([self.X_sym], self.output)
         
@@ -262,7 +262,7 @@ class MLP():
             else:
                 #early stopping
                 n_validation_down += 1
-            logging.info('epoch ' + str(n) + ' ,train_loss ' + str(l_train) + ' ,acc ' + str(acc_train) + ' ,val_loss ' + str(l_val) + ' ,acc ' + str(acc_val) + ',best_val_acc ' + str(best_val_acc))
+            logging.info('epoch ' + str(n) + ' ,train_loss ' + str(l_train) + ' ,self.acc ' + str(acc_train) + ' ,val_loss ' + str(l_val) + ' ,acc ' + str(acc_val) + ',best_val_acc ' + str(best_val_acc))
             if n_validation_down > self.early_stopping_max_down:
                 logging.info('validation results went down. early stopping ...')
                 break
