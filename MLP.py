@@ -262,7 +262,7 @@ class MLP():
             else:
                 #early stopping
                 n_validation_down += 1
-            logging.info('epoch ' + str(n) + ' ,train_loss ' + str(l_train) + ' ,self.acc ' + str(acc_train) + ' ,val_loss ' + str(l_val) + ' ,acc ' + str(acc_val) + ',best_val_acc ' + str(best_val_acc))
+            logging.info('epoch ' + str(n) + ' ,train_loss ' + str(l_train) + ' ,acc ' + str(acc_train) + ' ,val_loss ' + str(l_val) + ' ,acc ' + str(acc_val) + ',best_val_acc ' + str(best_val_acc))
             if n_validation_down > self.early_stopping_max_down:
                 logging.info('validation results went down. early stopping ...')
                 break
