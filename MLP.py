@@ -234,7 +234,7 @@ class MLP():
         
         self.f_train = theano.function([self.X_sym, self.y_sym], [loss, acc], updates=updates)
         self.f_val = theano.function([self.X_sym, self.y_sym], [loss, acc])
-        self.f_predict = theano.function([self.X_sym], pred)
+        self.f_predict = theano.function([self.X_sym], self.pred)
         self.f_predict_proba = theano.function([self.X_sym], self.output)
         
         
