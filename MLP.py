@@ -1,4 +1,9 @@
 '''
+Created on 27 Dec 2016
+
+@author: af
+'''
+'''
 Created on 22 Apr 2016
 @author: af
 '''
@@ -23,6 +28,7 @@ import gzip
 from collections import OrderedDict
 from _collections import defaultdict
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
+
 
 '''
 These sparse classes are copied from https://github.com/Lasagne/Lasagne/pull/596/commits
@@ -87,7 +93,6 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 
 
 
-
 class MLP():
     def __init__(self, 
                  n_epochs=10, 
@@ -120,13 +125,12 @@ class MLP():
     def fit(self, X_train, Y_train, X_dev, Y_dev):
         logging.info('building the network...' + ' hidden:' + str(self.add_hidden))
         in_size = X_train.shape[1]
-        best_params = None
-        best_val_acc = 0.0
         drop_out_hid, drop_out_in = self.drop_out_coefs
         if self.complete_prob:
             out_size = Y_train.shape[1]
         else:
             out_size = len(set(Y_train.tolist()))
+        logging.info('output size is %d' %out_size)
         
         if self.hidden_layer_size:
             pass
@@ -196,8 +200,12 @@ class MLP():
         if self.add_hidden:
             self.embedding = lasagne.layers.get_output(l_hid1, self.X_sym, deterministic=True)
             self.f_get_embeddings = theano.function([self.X_sym], self.embedding)
-        self.output = lasagne.layers.get_output(self.l_out, self.X_sym, deterministic=True)
+        self.output = lasagne.layers.get_output(self.l_out, self.X_sym, deterministic=False)
         self.pred = self.output.argmax(-1)
+        self.eval_output = lasagne.layers.get_output(self.l_out, self.X_sym, deterministic=True)
+        self.eval_pred = self.eval_output.argmax(-1)
+        eval_loss = lasagne.objectives.categorical_crossentropy(self.eval_output, self.y_sym)
+        eval_loss = eval_loss.mean()
         if self.loss_name == 'log':
             loss = lasagne.objectives.categorical_crossentropy(self.output, self.y_sym)
         elif self.loss_name == 'hinge':
@@ -215,12 +223,15 @@ class MLP():
             l1_penalty += lasagne.regularization.regularize_layer_params(l_hid1, l1) * regul_coef_hid * l1_share_hid
             l2_penalty += lasagne.regularization.regularize_layer_params(l_hid1, l2) * regul_coef_hid * (1-l1_share_hid)
         loss = loss + l1_penalty + l2_penalty
-    
+        eval_loss = eval_loss + l1_penalty + l2_penalty
+        
         if self.complete_prob:
             self.y_sym_one_hot = self.y_sym.argmax(-1)
             self.acc = T.mean(T.eq(self.pred, self.y_sym_one_hot))
+            self.eval_ac = T.mean(T.eq(self.eval_pred, self.y_sym_one_hot))
         else:
             self.acc = T.mean(T.eq(self.pred, self.y_sym))
+            self.eval_acc = T.mean(T.eq(self.eval_pred, self.y_sym))
         if self.init_parameters:
             lasagne.layers.set_all_param_values(self.l_out, self.init_parameters)
         parameters = lasagne.layers.get_all_params(self.l_out, trainable=True)
@@ -230,12 +241,12 @@ class MLP():
         #updates = lasagne.updates.sgd(loss, parameters, learning_rate=0.01)
         #updates = lasagne.updates.adagrad(loss, parameters, learning_rate=0.1, epsilon=1e-6)
         #updates = lasagne.updates.adadelta(loss, parameters, learning_rate=0.1, rho=0.95, epsilon=1e-6)
-        updates = lasagne.updates.adam(loss, parameters, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)
+        updates = lasagne.updates.adam(loss, parameters, learning_rate=0.002, beta1=0.9, beta2=0.999, epsilon=1e-8)
         
         self.f_train = theano.function([self.X_sym, self.y_sym], [loss, self.acc], updates=updates)
-        self.f_val = theano.function([self.X_sym, self.y_sym], [loss, self.acc])
-        self.f_predict = theano.function([self.X_sym], self.pred)
-        self.f_predict_proba = theano.function([self.X_sym], self.output)
+        self.f_val = theano.function([self.X_sym, self.y_sym], [eval_loss, self.eval_acc])
+        self.f_predict = theano.function([self.X_sym], self.eval_pred)
+        self.f_predict_proba = theano.function([self.X_sym], self.eval_output)
         
         
         X_train = X_train.astype('float32')
@@ -249,6 +260,9 @@ class MLP():
             Y_dev = Y_dev.astype('int32')
     
         logging.info('training (n_epochs, batch_size) = (' + str(self.n_epochs) + ', ' + str(self.batch_size) + ')' )
+        best_params = None
+        best_val_loss = sys.maxint
+        best_val_acc = 0.0
         n_validation_down = 0
         for n in xrange(self.n_epochs):
             for batch in iterate_minibatches(X_train, Y_train, self.batch_size, shuffle=True):
@@ -256,6 +270,7 @@ class MLP():
                 l_train, acc_train = self.f_train(x_batch, y_batch)
                 l_val, acc_val = self.f_val(X_dev, Y_dev)
             if acc_val > best_val_acc:
+                best_val_loss = l_val
                 best_val_acc = acc_val
                 best_params = lasagne.layers.get_all_param_values(self.l_out)
                 n_validation_down = 0
@@ -292,6 +307,8 @@ class MLP():
     
     def score(self, X_test, Y_test):
         return self.accuracy(X_test, Y_test)      
+    def get_embedding(self, X):
+        return self.f_get_embeddings(X)
         
         
 if __name__ == '__main__':
