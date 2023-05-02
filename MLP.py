@@ -26,7 +26,7 @@ import codecs
 import pickle
 import gzip
 from collections import OrderedDict
-from _collections import defaultdict
+#from _collections import defaultdict  # removed for Python 3
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
 
 
@@ -209,7 +209,7 @@ class MLP():
         if self.loss_name == 'log':
             loss = lasagne.objectives.categorical_crossentropy(self.output, self.y_sym)
         elif self.loss_name == 'hinge':
-            loss = lasagne.objectives.multiclass_hinge_loss(output, y_sym)
+            loss = lasagne.objectives.multiclass_hinge_loss(self.output, self.y_sym)
         loss = loss.mean()
         
         
@@ -264,7 +264,7 @@ class MLP():
         best_val_loss = sys.maxint
         best_val_acc = 0.0
         n_validation_down = 0
-        for n in xrange(self.n_epochs):
+        for n in range(self.n_epochs):
             for batch in iterate_minibatches(X_train, Y_train, self.batch_size, shuffle=True):
                 x_batch, y_batch = batch
                 l_train, acc_train = self.f_train(x_batch, y_batch)
